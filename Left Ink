@@ -1,434 +1,594 @@
--- Left Ink Guard Helper Script
--- Aimbot + ESP + FOV changer with UI toggles
--- Written naturally for better human-like style
+-- My awesome script
+-- Makes game stuff easier, like hitting guards and seeing through walls.
+-- Version: 1.2e (just works!)
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
+-- Game's main stuff
+local playersService = game:GetService("Players") -- Finds players
+local runService = game:GetService("RunService") -- Runs things every tick
+local gameWorld = game:GetService("Workspace") -- The whole game map
+local inputService = game:GetService("UserInputService") -- Gets your clicks and presses
+local tweenService = game:GetService("TweenService") -- Smooth movements
 
-local localPlayer = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
+-- My character and my view
+local me = playersService.LocalPlayer -- Me!
+local myCamera = gameWorld.CurrentCamera -- What I see
 
-local AIM_SPEED = 0.2
+-- My cool settings
+local aimSmoothness = 0.15 -- How smooth aimbot moves
+local attackRange = 15 -- How close for auto-hit
+local coolForkID = "rbxassetid://94033055914757" -- My special fork weapon
+local espBoxSize = 0.5 -- Makes boxes bigger
+local nextTargetKey = Enum.KeyCode.E -- Press E to switch guard target
 
-local espOn = false
-local aimOn = false
-local currentFOV = camera.FieldOfView
+-- My switches
+local autoAttackOn = false -- Auto-attack status
+local aimBotOn = false -- Aimbot status
+local wallHackOn = false -- Wallhack status
+local myCurrentFOV = myCamera.FieldOfView -- My field of view
 
--- Helper: try to set nice font, ignore if missing
-local function trySetFont(obj)
-	pcall(function()
-		obj.Font = Enum.Font.FredokaOne
-	end)
+-- Guard tracking
+local allGuards = {} -- All guards to mess with
+local currentGuardIndex = 0 -- Current aimbot target index
+
+-- Camera control check
+local amICameraControlling = false
+local saidThanksAlready = false -- Already said thanks
+
+inputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    -- If I'm holding right-click or touching, I'm moving the camera.
+    if input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+        amICameraControlling = true
+    end
+
+    -- Aimbot target switch on E key.
+    if not gameProcessedEvent and aimBotOn and input.KeyCode == nextTargetKey then
+        if #allGuards > 0 then
+            currentGuardIndex = currentGuardIndex + 1
+            if currentGuardIndex > #allGuards then
+                currentGuardIndex = 1 -- Loop to first guard
+            end
+            -- print("DBG: New guard: " .. allGuards[currentGuardIndex].Model.Name) -- For quick checks
+        else
+            currentGuardIndex = 0 -- No guards
+        end
+    end
+end)
+
+inputService.InputEnded:Connect(function(input)
+    -- Camera control released.
+    if input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.Touch then
+        amICameraControlling = false
+    end
+end)
+
+-- Keep numbers within limits
+local function keepInBounds(value, minVal, maxVal)
+	if value < minVal then return minVal end
+	if value > maxVal then return maxVal end
+	return value
 end
 
--- Clamp function to keep values in range
-local function clamp(val, minVal, maxVal)
-	if val < minVal then return minVal end
-	if val > maxVal then return maxVal end
-	return val
-end
+--- First pop-up ---
+local initialPopUp = Instance.new("ScreenGui")
+initialPopUp.Name = "MyCoolPopup"
+initialPopUp.ResetOnSpawn = false
+initialPopUp.Parent = me:WaitForChild("PlayerGui")
 
--- Popup GUI at bottom-left near jump button
-local popupGui = Instance.new("ScreenGui")
-popupGui.Name = "LeftInkPopup"
-popupGui.ResetOnSpawn = false
-popupGui.Parent = localPlayer:WaitForChild("PlayerGui")
+local popUpBox = Instance.new("Frame")
+popUpBox.Size = UDim2.new(0, 300, 0, 100)
+popUpBox.AnchorPoint = Vector2.new(1, 1)
+popUpBox.Position = UDim2.new(1, -10, 1, -10)
+popUpBox.BackgroundColor3 = Color3.fromRGB(30,30,30)
+popUpBox.BackgroundTransparency = 0.15
+popUpBox.BorderSizePixel = 0
+popUpBox.Parent = initialPopUp
 
-local popupFrame = Instance.new("Frame")
-popupFrame.Size = UDim2.new(0, 300, 0, 100)
-popupFrame.Position = UDim2.new(0, 10, 1, -120)
-popupFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
-popupFrame.BackgroundTransparency = 0.15
-popupFrame.BorderSizePixel = 0
-popupFrame.Parent = popupGui
+local boxCorners = Instance.new("UICorner", popUpBox)
+boxCorners.CornerRadius = UDim.new(0, 12)
 
-local popupCorner = Instance.new("UICorner", popupFrame)
-popupCorner.CornerRadius = UDim.new(0, 12)
+local questionText = Instance.new("TextLabel")
+questionText.Size = UDim2.new(1, -20, 0, 40)
+questionText.Position = UDim2.new(0, 10, 0, 10)
+questionText.Text = "Wanna use my cool script"
+questionText.TextColor3 = Color3.new(1,1,1)
+questionText.BackgroundTransparency = 1
+questionText.Parent = popUpBox
+pcall(function() questionText.Font = Enum.Font.FredokaOne end)
+questionText.TextSize = 20
 
-local popupLabel = Instance.new("TextLabel")
-popupLabel.Size = UDim2.new(1, -20, 0, 40)
-popupLabel.Position = UDim2.new(0, 10, 0, 10)
-popupLabel.Text = "Load Left Ink Script?"
-popupLabel.TextColor3 = Color3.new(1,1,1)
-popupLabel.BackgroundTransparency = 1
-popupLabel.Parent = popupFrame
-trySetFont(popupLabel)
-popupLabel.TextSize = 20
+local buttonHolder = Instance.new("Frame")
+buttonHolder.Size = UDim2.new(1, -20, 0, 30)
+buttonHolder.Position = UDim2.new(0, 10, 1, -40)
+buttonHolder.BackgroundTransparency = 1
+buttonHolder.Parent = popUpBox
 
-local yesBtn = Instance.new("TextButton")
-yesBtn.Size = UDim2.new(0, 120, 0, 30)
-yesBtn.Position = UDim2.new(0, 15, 1, -40)
-yesBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-yesBtn.TextColor3 = Color3.new(1,1,1)
-yesBtn.Text = "Yes"
-yesBtn.Parent = popupFrame
-trySetFont(yesBtn)
-yesBtn.TextSize = 18
+local buttonLayout = Instance.new("UIListLayout", buttonHolder)
+buttonLayout.FillDirection = Enum.FillDirection.Horizontal
+buttonLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+buttonLayout.Padding = UDim.new(0, 10)
 
-local noBtn = Instance.new("TextButton")
-noBtn.Size = UDim2.new(0, 120, 0, 30)
-noBtn.Position = UDim2.new(1, -135, 1, -40)
-noBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-noBtn.TextColor3 = Color3.new(1,1,1)
-noBtn.Text = "No"
-noBtn.Parent = popupFrame
-trySetFont(noBtn)
-noBtn.TextSize = 18
+local yesButton = Instance.new("TextButton")
+yesButton.Size = UDim2.new(0, 80, 0, 30)
+yesButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+yesButton.TextColor3 = Color3.new(1,1,1)
+yesButton.Text = "Yeah!"
+yesButton.Parent = buttonHolder
+pcall(function() yesButton.Font = Enum.Font.FredokaOne end)
+yesButton.TextSize = 18
 
--- Close popup safely
-local function closePopup()
-	if popupGui and popupGui.Parent then
-		popupGui:Destroy()
+local noButton = Instance.new("TextButton")
+noButton.Size = UDim2.new(0, 80, 0, 30)
+noButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+noButton.TextColor3 = Color3.new(1,1,1)
+noButton.Text = "Nah."
+noButton.Parent = buttonHolder
+pcall(function() noButton.Font = Enum.Font.FredokaOne end)
+noButton.TextSize = 18
+
+local function hidePopup()
+	if initialPopUp and initialPopUp.Parent then
+		initialPopUp:Destroy()
 	end
 end
 
--- Main GUI setup (centered)
-local mainGui = Instance.new("ScreenGui")
-mainGui.Name = "LeftInkMain"
-mainGui.ResetOnSpawn = false
-mainGui.Parent = localPlayer:WaitForChild("PlayerGui")
-mainGui.Enabled = false
+--- Little ! Button at the Top ---
+local topBarGUI = Instance.new("ScreenGui")
+topBarGUI.Name = "MyTopButton"
+topBarGUI.ResetOnSpawn = false
+topBarGUI.Parent = me:WaitForChild("PlayerGui")
+topBarGUI.Enabled = false -- Starts hidden
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 190, 0, 190) -- taller to fit FOV input nicely
-mainFrame.Position = UDim2.new(0.5, -95, 0.5, -95)
-mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainFrame.BackgroundTransparency = 0.2
-mainFrame.BorderSizePixel = 0
-mainFrame.Active = true
-mainFrame.Draggable = true
-mainFrame.Parent = mainGui
+local topBarFrame = Instance.new("Frame")
+topBarFrame.Size = UDim2.new(0, 250, 0, 40)
+topBarFrame.AnchorPoint = Vector2.new(0.5, 0)
+topBarFrame.Position = UDim2.new(0.5, 0, 0, 10)
+topBarFrame.BackgroundColor3 = Color3.fromRGB(111, 207, 108)
+topBarFrame.BackgroundTransparency = 0.05
+topBarFrame.BorderSizePixel = 0
+topBarFrame.Active = true
+topBarFrame.Draggable = true
+topBarFrame.Parent = topBarGUI
 
-local mainCorner = Instance.new("UICorner", mainFrame)
-mainCorner.CornerRadius = UDim.new(0, 8)
+local topBarCorners = Instance.new("UICorner", topBarFrame)
+topBarCorners.CornerRadius = UDim.new(0, 20)
 
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, 0, 0, 30)
-titleLabel.Position = UDim2.new(0, 0, 0, 0)
-titleLabel.Text = "Left Ink"
-titleLabel.TextColor3 = Color3.new(1, 1, 1)
-titleLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-titleLabel.BorderSizePixel = 0
-titleLabel.TextSize = 20
-titleLabel.Font = Enum.Font.FredokaOne
-titleLabel.Parent = mainFrame
+-- The ! button itself
+local theExclamationButton = Instance.new("ImageButton")
+theExclamationButton.Name = "OpenMyMenuBtn"
+theExclamationButton.Size = UDim2.new(0, 30, 0, 30)
+theExclamationButton.AnchorPoint = Vector2.new(0, 0.5)
+theExclamationButton.Position = UDim2.new(0, 5, 0.5, 0)
+theExclamationButton.BackgroundTransparency = 1
+theExclamationButton.Image = "rbxassetid://93809332227567" -- Your '!' icon asset ID.
+theExclamationButton.Parent = topBarFrame
 
-local function createToggle(text, parent, posY, onToggle)
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, -20, 0, 30)
-	btn.Position = UDim2.new(0, 10, 0, posY)
-	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-	btn.TextColor3 = Color3.new(1, 1, 1)
-	btn.Font = Enum.Font.FredokaOne
-	btn.TextSize = 16
-	btn.Text = text .. " [OFF]"
-	btn.Parent = parent
+local exclamationCorners = Instance.new("UICorner", theExclamationButton)
+exclamationCorners.CornerRadius = UDim.new(0, 15)
 
-	btn.MouseEnter:Connect(function()
-		btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+-- The "thanks for using" message
+local thankYouMessage = Instance.new("TextLabel")
+thankYouMessage.Name = "ThanksText"
+thankYouMessage.Size = UDim2.new(1, -45, 1, 0)
+thankYouMessage.Position = UDim2.new(0, 40, 0, 0)
+thankYouMessage.Text = "yo, thanks for using my script :)"
+thankYouMessage.TextColor3 = Color3.fromRGB(255, 255, 255)
+thankYouMessage.BackgroundTransparency = 1
+thankYouMessage.TextSize = 18
+thankYouMessage.TextScaled = true
+thankYouMessage.TextXAlignment = Enum.TextXAlignment.Left
+thankYouMessage.Visible = false -- Starts hidden
+pcall(function() thankYouMessage.Font = Enum.Font.FredokaOne end)
+thankYouMessage.Parent = topBarFrame
+
+topBarFrame.MouseButton1Click:Connect(function()
+    topBarGUI.Enabled = false -- Hide little button
+    mainCheatGUI.Enabled = true    -- Show big menu
+    thankYouMessage.Visible = false -- Hide thanks message
+end)
+theExclamationButton.MouseButton1Click:Connect(function()
+    topBarGUI.Enabled = false -- Hide little button
+    mainCheatGUI.Enabled = true    -- Show big menu
+    thankYouMessage.Visible = false -- Hide thanks message
+end)
+
+
+--- My Big Cheat Menu ---
+local mainCheatGUI = Instance.new("ScreenGui")
+mainCheatGUI.Name = "MyMainCheats"
+mainCheatGUI.ResetOnSpawn = false
+mainCheatGUI.Parent = me:WaitForChild("PlayerGui")
+mainCheatGUI.Enabled = false -- Starts hidden
+
+local mainCheatFrame = Instance.new("Frame")
+mainCheatFrame.Name = "CheatMenuFrame"
+mainCheatFrame.Size = UDim2.new(0, 220, 0, 260)
+mainCheatFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainCheatFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainCheatFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainCheatFrame.BackgroundTransparency = 0.1
+mainCheatFrame.BorderSizePixel = 0
+mainCheatFrame.Active = true
+mainCheatFrame.Draggable = true
+mainCheatFrame.Parent = mainCheatGUI
+
+local cheatFrameCorners = Instance.new("UICorner", mainCheatFrame)
+cheatFrameCorners.CornerRadius = UDim.new(0, 8)
+
+local menuTitle = Instance.new("TextLabel")
+menuTitle.Size = UDim2.new(1, 0, 0, 35)
+menuTitle.Position = UDim2.new(0, 0, 0, 0)
+menuTitle.Text = "My Cool Cheats!"
+menuTitle.TextColor3 = Color3.new(1, 1, 1)
+menuTitle.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+menuTitle.BorderSizePixel = 0
+menuTitle.TextSize = 22
+pcall(function() menuTitle.Font = Enum.Font.FredokaOne end)
+menuTitle.Parent = mainCheatFrame
+
+-- Button to hide the big menu
+local hideMenuBtn = Instance.new("TextButton")
+hideMenuBtn.Name = "HideMenuButton"
+hideMenuBtn.Size = UDim2.new(0, 60, 0, 25)
+hideMenuBtn.Position = UDim2.new(1, -70, 0, 5)
+hideMenuBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+hideMenuBtn.TextColor3 = Color3.new(1, 1, 1)
+hideMenuBtn.Text = "Bye!"
+hideMenuBtn.Parent = mainCheatFrame
+pcall(function() hideMenuBtn.Font = Enum.Font.FredokaOne end)
+hideMenuBtn.TextSize = 18
+hideMenuBtn.MouseButton1Click:Connect(function()
+    mainCheatGUI.Enabled = false -- Hide big menu
+    topBarGUI.Enabled = true -- Show little button again
+    thankYouMessage.Visible = false -- Keep thanks hidden after first time
+    saidThanksAlready = true -- Remembered I said thanks
+end)
+
+local function makeToggleButton(buttonName, parentFrame, yPosition, whenToggled)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(1, -30, 0, 35)
+	button.Position = UDim2.new(0, 15, 0, yPosition)
+	button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	button.TextColor3 = Color3.new(1, 1, 1)
+	pcall(function() button.Font = Enum.Font.FredokaOne end)
+	button.TextSize = 18
+	button.Text = buttonName .. " [OFF]"
+	button.Parent = parentFrame
+
+	local buttonRoundness = Instance.new("UICorner", button)
+	buttonRoundness.CornerRadius = UDim.new(0, 6)
+
+	button.MouseEnter:Connect(function()
+		if button.Text:find("OFF") then
+			button.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+		end
 	end)
-	btn.MouseLeave:Connect(function()
-		btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	button.MouseLeave:Connect(function()
+		if button.Text:find("OFF") then
+			button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		end
 	end)
 
-	btn.MouseButton1Click:Connect(function()
-		local enabled = btn.Text:find("OFF") ~= nil
-		btn.Text = text .. (enabled and " [ON]" or " [OFF]")
-		onToggle(enabled)
-	end)
-
-	return btn
-end
-
-local yPos = 40
-local espToggle = createToggle("ESP", mainFrame, yPos, function(state)
-	espOn = state
-end)
-yPos = yPos + 40
-local aimToggle = createToggle("Aimbot", mainFrame, yPos, function(state)
-	aimOn = state
-end)
-yPos = yPos + 45
-
--- FOV label
-local fovLabel = Instance.new("TextLabel")
-fovLabel.Size = UDim2.new(1, -20, 0, 25)
-fovLabel.Position = UDim2.new(0, 10, 0, yPos)
-fovLabel.BackgroundTransparency = 1
-fovLabel.TextColor3 = Color3.new(1, 1, 1)
-fovLabel.Font = Enum.Font.FredokaOne
-fovLabel.TextSize = 16
-fovLabel.Text = "Camera FOV: " .. math.floor(currentFOV)
-fovLabel.Parent = mainFrame
-yPos = yPos + 25
-
--- FOV slider background (resized to fit)
-local fovSlider = Instance.new("ImageButton")
-fovSlider.Size = UDim2.new(1, -20, 0, 20)
-fovSlider.Position = UDim2.new(0, 10, 0, yPos)
-fovSlider.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-fovSlider.AutoButtonColor = false
-fovSlider.Parent = mainFrame
-
-local sliderCorner = Instance.new("UICorner", fovSlider)
-sliderCorner.CornerRadius = UDim.new(0, 5)
-
-local sliderFill = Instance.new("Frame", fovSlider)
-sliderFill.Size = UDim2.new((currentFOV/120), 0, 1, 0)
-sliderFill.BackgroundColor3 = Color3.fromRGB(100, 220, 100)
-sliderFill.BorderSizePixel = 0
-
--- FOV input box under slider
-local fovInput = Instance.new("TextBox")
-fovInput.Size = UDim2.new(1, -20, 0, 25)
-fovInput.Position = UDim2.new(0, 10, 0, yPos + 25)
-fovInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-fovInput.TextColor3 = Color3.new(1, 1, 1)
-fovInput.ClearTextOnFocus = false
-fovInput.Font = Enum.Font.FredokaOne
-fovInput.TextSize = 16
-fovInput.Text = tostring(math.floor(currentFOV))
-fovInput.PlaceholderText = "Enter FOV (1-120)"
-fovInput.Parent = mainFrame
-
-local draggingSlider = false
-
-local function updateFOV(x)
-	local relativeX = math.clamp(x - fovSlider.AbsolutePosition.X, 0, fovSlider.AbsoluteSize.X)
-	local ratio = relativeX / fovSlider.AbsoluteSize.X
-	currentFOV = clamp(ratio * 120, 1, 120)
-	camera.FieldOfView = currentFOV
-	sliderFill.Size = UDim2.new(ratio, 0, 1, 0)
-	fovLabel.Text = "Camera FOV: " .. math.floor(currentFOV)
-	fovInput.Text = tostring(math.floor(currentFOV))
-end
-
-fovSlider.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		draggingSlider = true
-		updateFOV(input.Position.X)
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				draggingSlider = false
-			end
-		end)
-	end
-end)
-
-fovSlider.InputChanged:Connect(function(input)
-	if draggingSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-		updateFOV(input.Position.X)
-	end
-end)
-
-fovInput.FocusLost:Connect(function(enterPressed)
-	if enterPressed then
-		local val = tonumber(fovInput.Text)
-		if val then
-			val = clamp(val, 1, 120)
-			currentFOV = val
-			camera.FieldOfView = currentFOV
-			fovLabel.Text = "Camera FOV: " .. math.floor(currentFOV)
-			sliderFill.Size = UDim2.new(currentFOV/120, 0, 1, 0)
-			fovInput.Text = tostring(math.floor(currentFOV))
+	button.MouseButton1Click:Connect(function()
+		local isOn = button.Text:find("OFF") ~= nil
+		button.Text = buttonName .. (isOn and " [ON]" or " [OFF]")
+		if isOn then
+			button.BackgroundColor3 = Color3.fromRGB(60, 150, 60) -- Green when ON
 		else
-			fovInput.Text = tostring(math.floor(currentFOV))
+			button.BackgroundColor3 = Color3.fromRGB(40, 40, 40) -- Dark gray when OFF
 		end
-	end
+		whenToggled(isOn)
+	end)
+
+	return button
+end
+
+local currentYPosition = 50
+local autoAttackToggle = makeToggleButton("Auto Hit Guards", mainCheatFrame, currentYPosition, function(state)
+	autoAttackOn = state
 end)
-
--- Open/close toggle button (fixed near top-left but slightly right)
-local toggleGui = Instance.new("ScreenGui")
-toggleGui.Name = "LeftInkToggle"
-toggleGui.ResetOnSpawn = false
-toggleGui.Parent = localPlayer:WaitForChild("PlayerGui")
-
-local toggleButton = Instance.new("ImageButton")
-toggleButton.Size = UDim2.new(0, 50, 0, 50)
-toggleButton.Position = UDim2.new(0, 25, 0, 10)
-toggleButton.BackgroundTransparency = 1
-toggleButton.Image = "rbxassetid://93809332227567" -- Your asset id here
-toggleButton.Parent = toggleGui
-
-local toggleCorner = Instance.new("UICorner", toggleButton)
-toggleCorner.CornerRadius = UDim.new(0, 12)
-
-toggleButton.MouseButton1Click:Connect(function()
-	mainGui.Enabled = not mainGui.Enabled
+currentYPosition = currentYPosition + 45
+local aimBotToggle = makeToggleButton("Aim Helper", mainCheatFrame, currentYPosition, function(state)
+	aimBotOn = state
+    -- If aimbot turns off, forget who I was looking at
+    if not aimBotOn then
+        currentGuardIndex = 0
+    end
 end)
-
--- ESP support
-local espBoxes = {}
-
-local function clearESP()
-	for model, box in pairs(espBoxes) do
-		if box and box.Parent then
-			box:Destroy()
-		end
-		espBoxes[model] = nil
-	end
-end
-
-local function attachESP(model, part)
-	if espBoxes[model] then return end
-	local box = Instance.new("BoxHandleAdornment")
-	box.Name = "LeftInkESP"
-	box.Adornee = part
-	box.Size = part.Size
-	box.Color3 = Color3.fromRGB(255, 0, 0)
-	box.Transparency = 0.3
-	box.ZIndex = 10
-	box.AlwaysOnTop = true
-	box.AdornCullingMode = Enum.AdornCullingMode.Never
-	box.Parent = part
-	espBoxes[model] = box
-end
-
-local function isGuard(model)
-	if not model or not model:IsA("Model") then return false end
-	local lowerName = model.Name:lower()
-	if lowerName:find("guard") or lowerName:find("squid") or lowerName:find("guy") then
-		return true
-	end
-	return false
-end
-
-local function getRootPart(model)
-	if not model then return nil end
-	for _, part in pairs(model:GetChildren()) do
-		if part:IsA("BasePart") and part.Name == "HumanoidRootPart" then
-			return part
-		end
-	end
-	return nil
-end
-
--- Aim target tracking
-local currentTarget = nil
-
-RunService.RenderStepped:Connect(function()
-	local char = localPlayer.Character
-	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-	local root = char.HumanoidRootPart
-
-	-- Clean up ESP if off
-	if not espOn then
-		clearESP()
-	else
-		-- Attach ESP to guards
-		for _, model in pairs(Workspace:GetChildren()) do
-			if isGuard(model) then
-				local rootPart = getRootPart(model)
-				if rootPart then
-					attachESP(model, rootPart)
+currentYPosition = currentYPosition + 45
+local wallHackToggle = makeToggleButton("See Through Walls", mainCheatFrame, currentYPosition, function(state)
+	wallHackOn = state
+	if not wallHackOn then
+		-- When wallhack is off, make all the boxes disappear instantly
+		for _, thing in ipairs(gameWorld:GetDescendants()) do
+			if thing:IsA("BasePart") then
+				local espBox = thing:FindFirstChild("ESP")
+				if espBox then
+					espBox:Destroy()
 				end
 			end
 		end
 	end
+end)
+currentYPosition = currentYPosition + 55 -- More space for FOV
 
-	-- Aim logic
-	if aimOn then
-		local bestTarget = nil
-		local bestDist = math.huge
-		for _, model in pairs(Workspace:GetChildren()) do
-			if isGuard(model) then
-				local rootPart = getRootPart(model)
-				if rootPart then
-					local dist = (rootPart.Position - root.Position).Magnitude
-					if dist < bestDist then
-						bestDist = dist
-						bestTarget = rootPart
+-- FOV (how wide I see) label
+local fovTextLabel = Instance.new("TextLabel")
+fovTextLabel.Size = UDim2.new(1, -30, 0, 25)
+fovTextLabel.Position = UDim2.new(0, 15, 0, currentYPosition)
+fovTextLabel.BackgroundTransparency = 1
+fovTextLabel.TextColor3 = Color3.new(1, 1, 1)
+pcall(function() fovTextLabel.Font = Enum.Font.FredokaOne end)
+fovTextLabel.TextSize = 16
+fovTextLabel.Text = "How Wide I See: " .. math.floor(myCurrentFOV)
+fovTextLabel.TextXAlignment = Enum.TextXAlignment.Left
+fovTextLabel.Parent = mainCheatFrame
+currentYPosition = currentYPosition + 25
+
+-- FOV slider and number box
+local fovSliderContainer = Instance.new("Frame")
+fovSliderContainer.Size = UDim2.new(1, -30, 0, 30)
+fovSliderContainer.Position = UDim2.new(0, 15, 0, currentYPosition)
+fovSliderContainer.BackgroundTransparency = 1
+fovSliderContainer.Parent = mainCheatFrame
+
+local fovSliderBar = Instance.new("ImageButton")
+fovSliderBar.Size = UDim2.new(1, -60, 0, 15)
+fovSliderBar.Position = UDim2.new(0, 0, 0.5, -7.5)
+fovSliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+fovSliderBar.AutoButtonColor = false
+fovSliderBar.Parent = fovSliderContainer
+
+local sliderBarCorners = Instance.new("UICorner", fovSliderBar)
+sliderBarCorners.CornerRadius = UDim.new(0, 7)
+
+local sliderFillBar = Instance.new("Frame", fovSliderBar)
+sliderFillBar.Size = UDim2.new((myCurrentFOV/120), 0, 1, 0)
+sliderFillBar.BackgroundColor3 = Color3.fromRGB(100, 220, 100)
+sliderFillBar.BorderSizePixel = 0
+
+-- Number input next to slider
+local fovNumberInput = Instance.new("TextBox")
+fovNumberInput.Size = UDim2.new(0, 50, 0, 25)
+fovNumberInput.Position = UDim2.new(1, -55, 0.5, -12.5)
+fovNumberInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+fovNumberInput.TextColor3 = Color3.new(1, 1, 1)
+fovNumberInput.ClearTextOnFocus = false
+pcall(function() fovNumberInput.Font = Enum.Font.FredokaOne end)
+fovNumberInput.TextSize = 16
+fovNumberInput.Text = tostring(math.floor(myCurrentFOV))
+fovNumberInput.PlaceholderText = "1-120"
+fovNumberInput.Parent = fovSliderContainer
+local numberInputCorners = Instance.new("UICorner", fovNumberInput)
+numberInputCorners.CornerRadius = UDim.new(0, 5)
+
+local isDraggingFOV = false
+
+local function updateFOV_Visuals(xCoord)
+	local relativeX = keepInBounds(xCoord - fovSliderBar.AbsolutePosition.X, 0, fovSliderBar.AbsoluteSize.X)
+	local percentage = relativeX / fovSliderBar.AbsoluteSize.X
+	myCurrentFOV = keepInBounds(percentage * 120, 1, 120)
+	sliderFillBar.Size = UDim2.new(percentage, 0, 1, 0)
+	fovTextLabel.Text = "How Wide I See: " .. math.floor(myCurrentFOV)
+	fovNumberInput.Text = tostring(math.floor(myCurrentFOV))
+end
+
+fovSliderBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isDraggingFOV = true
+		updateFOV_Visuals(input.Position.X)
+	end
+end)
+
+inputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		isDraggingFOV = false
+	end
+})
+
+inputService.InputChanged:Connect(function(input)
+	if isDraggingFOV and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		updateFOV_Visuals(input.Position.X)
+	end
+end)
+
+fovNumberInput.FocusLost:Connect(function(enterPressed)
+	if enterPressed then
+		local enteredValue = tonumber(fovNumberInput.Text)
+		if enteredValue then
+			enteredValue = keepInBounds(enteredValue, 1, 120)
+			myCurrentFOV = enteredValue
+			fovTextLabel.Text = "How Wide I See: " .. math.floor(myCurrentFOV)
+			sliderFillBar.Size = UDim2.new(myCurrentFOV/120, 0, 1, 0)
+			fovNumberInput.Text = tostring(math.floor(myCurrentFOV))
+		else
+			fovNumberInput.Text = tostring(math.floor(myCurrentFOV)) -- Put old number back if bad input
+		end
+	end
+end)
+
+
+--- Wallhacks and Aimbot Stuff ---
+
+-- Find all the guards
+local function findMyTargets()
+	local foundTargets = {}
+	for _, thingInWorld in ipairs(gameWorld:GetDescendants()) do
+		-- Don't target myself or other players
+		if thingInWorld:IsA("Model") and not playersService:GetPlayerFromCharacter(thingInWorld) and thingInWorld ~= me.Character then
+			local theirHumanoid = thingInWorld:FindFirstChildOfClass("Humanoid")
+			-- Make sure they're alive and have a body part to target
+			if theirHumanoid and theirHumanoid.Health > 0 and theirHumanoid.RootPart and theirHumanoid.RootPart.Parent == thingInWorld and (theirHumanoid.HealthState == Enum.HumanoidHealthState.Health or theirHumanoid.HumanoidHealthState == Enum.HumanoidHealthState.GettingUp) then
+				local nameLowerCase = thingInWorld.Name:lower()
+
+				-- Look for common guard names
+				if nameLowerCase:find("guard") or nameLowerCase:find("squid") or nameLowerCase:find("guy") or nameLowerCase:find("npc") then
+					local mainBodyPart = theirHumanoid.RootPart -- Their main body part
+
+					if mainBodyPart then
+						table.insert(foundTargets, {Model = thingInWorld, Root = mainBodyPart})
 					end
 				end
 			end
 		end
-		if bestTarget then
-			currentTarget = bestTarget
-			local dir = (currentTarget.Position - camera.CFrame.Position).Unit
-			local newCFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + dir)
-			camera.CFrame = camera.CFrame:Lerp(newCFrame, AIM_SPEED)
-		else
-			currentTarget = nil
+	end
+	return foundTargets
+end
+
+-- Get my fork weapon
+local function getMyFork()
+	local myChar = me.Character
+	if myChar then
+		for _, tool in ipairs(myChar:GetChildren()) do
+			if tool:IsA("Tool") and tool.TextureId and tool.TextureId:find(coolForkID) then
+				return tool
+			end
 		end
+	end
+    return nil -- No fork found
+end
+
+-- Make a box around stuff
+local function drawESPBox(modelToBox, partToAttachTo)
+	local existingBox = partToAttachTo:FindFirstChild("ESP") -- Check for existing box
+	if existingBox then
+		existingBox.Size = partToAttachTo.Size + Vector3.new(espBoxSize, espBoxSize, espBoxSize)
+		return existingBox
 	else
-		currentTarget = nil
+		local newBox = Instance.new("BoxHandleAdornment")
+		newBox.Name = "ESP"
+		newBox.Adornee = partToAttachTo
+		newBox.Size = partToAttachTo.Size + Vector3.new(espBoxSize, espBoxSize, espBoxSize)
+		newBox.Color3 = Color3.fromRGB(255, 0, 0) -- Red box
+		newBox.Transparency = 0.25
+		newBox.ZIndex = 10
+		newBox.AlwaysOnTop = true -- Always visible
+		newBox.AdornCullingMode = Enum.AdornCullingMode.Never -- Doesn't disappear far away
+		newBox.Parent = partToAttachTo -- Stick it to the body part
+		return newBox
+	end
+end
+
+-- Runs every single frame
+runService.RenderStepped:Connect(function()
+	local myChar = me.Character
+	if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end -- Stop if I'm not here
+	local myRootPart = myChar.HumanoidRootPart
+	local myFork = getMyFork()
+
+	-- Set my FOV if the big menu is open
+	if mainCheatGUI.Enabled then
+		myCamera.FieldOfView = myCurrentFOV
+	end
+
+	-- Update the list of guards
+	allGuards = findMyTargets()
+
+	local targetForAim = nil
+    if aimBotOn and not amICameraControlling and #allGuards > 0 then
+        -- Find a new guard if the old one is gone or messed up
+        if currentGuardIndex < 1 or currentGuardIndex > #allGuards or not allGuards[currentGuardIndex].Root.Parent then
+            -- Find the closest valid guard
+            local closestValidIndex = 0
+            local closestValidDistance = math.huge
+            for i, guard in ipairs(allGuards) do
+                if guard.Root and guard.Root.Parent then
+                    local distance = (guard.Root.Position - myRootPart.Position).Magnitude
+                    if distance < closestValidDistance then
+                        closestValidDistance = distance
+                        closestValidIndex = i
+                    end
+                end
+            end
+            currentGuardIndex = closestValidIndex -- Set to the closest
+        end
+
+        if currentGuardIndex > 0 and allGuards[currentGuardIndex] and allGuards[currentGuardIndex].Root.Parent then
+            targetForAim = allGuards[currentGuardIndex].Root
+        else
+            currentGuardIndex = 0 -- No guards found
+        end
+    end
+
+	local targetsThisFrame = {} -- Track who I saw this frame for wallhacks
+
+	for _, guardEntry in ipairs(allGuards) do
+		local guardModel = guardEntry.Model
+		local guardMainPart = guardEntry.Root
+
+		if guardModel and guardMainPart and guardMainPart.Parent then
+			local distance = (guardMainPart.Position - myRootPart.Position).Magnitude
+
+			if wallHackOn then
+				targetsThisFrame[guardModel] = true
+				drawESPBox(guardModel, guardMainPart)
+			end
+
+			-- Auto-attack logic
+			if autoAttackOn and distance <= attackRange and myFork and myFork:FindFirstChild("RemoteEvent") then
+				myFork.RemoteEvent:FireServer(guardModel)
+			end
+		end
+	end
+
+	-- Wallhack Cleanup: Remove boxes for guards who are gone
+	if wallHackOn then
+		for _, thing in ipairs(gameWorld:GetDescendants()) do
+			if thing:IsA("BasePart") then
+				local espBox = thing:FindFirstChild("ESP")
+				if espBox and espBox.Adornee == thing then
+					local parentModel = espBox.Adornee.Parent
+					if parentModel and not targetsThisFrame[parentModel] then
+						espBox:Destroy()
+					end
+				end
+			end
+		end
+	else -- If wallhack is off, clear ALL boxes
+        for _, thing in ipairs(gameWorld:GetDescendants()) do
+            if thing:IsA("BasePart") then
+                local espBox = thing:FindFirstChild("ESP")
+                if espBox then
+                    espBox:Destroy()
+                end
+            end
+        end
+	end
+
+	-- Aimbot magic if it's on and I'm not moving the camera
+	if aimBotOn and not amICameraControlling and targetForAim then
+		local direction = (targetForAim.Position - myCamera.CFrame.Position).Unit
+		local lookCFrame = CFrame.new(myCamera.CFrame.Position, myCamera.CFrame.Position + direction)
+		myCamera.Cframe = myCamera.CFrame:Lerp(lookCFrame, aimSmoothness)
 	end
 end)
 
--- Close popup when Yes or No clicked or after timeout
-yesBtn.MouseButton1Click:Connect(function()
-	closePopup()
-	mainGui.Enabled = true
+
+--- Pop-up button clicks ---
+yesButton.MouseButton1Click:Connect(function()
+	hidePopup()
+	topBarGUI.Enabled = true -- Show little button
+	mainCheatGUI.Enabled = false -- Keep big menu hidden
+    if not saidThanksAlready then
+        thankYouMessage.Visible = true -- Show thanks, only once
+        saidThanksAlready = true
+    end
 end)
 
-noBtn.MouseButton1Click:Connect(function()
-	closePopup()
+noButton.MouseButton1Click:Connect(function()
+	hidePopup()
+	topBarGUI.Enabled = false -- No GUI
+	mainCheatGUI.Enabled = false
 end)
 
+-- Auto hide popup after a bit if no click
 task.delay(10, function()
-	closePopup()
-end)
-
--- Thank you popup after main GUI enabled
-local function showThanks()
-	local thanksGui = Instance.new("ScreenGui")
-	thanksGui.Name = "LeftInkThanks"
-	thanksGui.ResetOnSpawn = false
-	thanksGui.Parent = localPlayer:WaitForChild("PlayerGui")
-
-	local thanksFrame = Instance.new("Frame")
-	thanksFrame.Size = UDim2.new(0, 220, 0, 40)
-	thanksFrame.Position = UDim2.new(0.5, -110, 0, 20)
-	thanksFrame.BackgroundColor3 = Color3.fromRGB(0, 160, 0)
-	thanksFrame.BackgroundTransparency = 0.4
-	thanksFrame.BorderSizePixel = 0
-	thanksFrame.Parent = thanksGui
-
-	local thanksCorner = Instance.new("UICorner", thanksFrame)
-	thanksCorner.CornerRadius = UDim.new(0, 10)
-
-	local infoCircle = Instance.new("Frame")
-	infoCircle.Size = UDim2.new(0, 26, 1, 0)
-	infoCircle.Position = UDim2.new(0, 7, 0, 0)
-	infoCircle.BackgroundColor3 = Color3.new(1, 1, 1)
-	infoCircle.BorderSizePixel = 0
-	infoCircle.Parent = thanksFrame
-
-	local infoCorner = Instance.new("UICorner", infoCircle)
-	infoCorner.CornerRadius = UDim.new(0, 13)
-
-	local infoLabel = Instance.new("TextLabel")
-	infoLabel.Size = UDim2.new(1, 0, 1, 0)
-	infoLabel.BackgroundTransparency = 1
-	infoLabel.Text = "ᴉ" -- upside down i
-	infoLabel.Font = Enum.Font.FredokaOne
-	infoLabel.TextSize = 24
-	infoLabel.TextColor3 = Color3.fromRGB(0, 160, 0)
-	infoLabel.TextStrokeTransparency = 0.9
-	infoLabel.Parent = infoCircle
-
-	local thanksLabel = Instance.new("TextLabel")
-	thanksLabel.Size = UDim2.new(1, -38, 1, 0)
-	thanksLabel.Position = UDim2.new(0, 35, 0, 0)
-	thanksLabel.BackgroundTransparency = 1
-	thanksLabel.TextColor3 = Color3.new(1, 1, 1)
-	thanksLabel.Font = Enum.Font.FredokaOne
-	thanksLabel.TextSize = 18
-	thanksLabel.Text = "ty for using left ink :)"
-	thanksLabel.Parent = thanksFrame
-
-	task.delay(4, function()
-		if thanksGui and thanksGui.Parent then
-			thanksGui:Destroy()
-		end
-	end)
-end
-
-mainGui:GetPropertyChangedSignal("Enabled"):Connect(function()
-	if mainGui.Enabled then
-		showThanks()
+	if initialPopUp and initialPopUp.Parent then
+		hidePopup()
+		topBarGUI.Enabled = true -- Show little button by default
+		mainCheatGUI.Enabled = false
+        if not saidThanksAlready then
+            thankYouMessage.Visible = true
+            saidThanksAlready = true
+        end
 	end
 end)
