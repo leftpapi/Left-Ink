@@ -1,303 +1,434 @@
--- Left Ink GUI by LeftPapi
+-- Left Ink Guard Helper Script
+-- Aimbot + ESP + FOV changer with UI toggles
+-- Written naturally for better human-like style
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
 
-local player = Players.LocalPlayer
+local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
-local AIM_SPEED = 0.1
-local isESPEnabled = false
-local isAimEnabled = false
+local AIM_SPEED = 0.2
 
--- Function to show error messages
-local function displayError(errMsg)
-	local errGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-	errGui.Name = "LeftInkError"
-	errGui.ResetOnSpawn = false
+local espOn = false
+local aimOn = false
+local currentFOV = camera.FieldOfView
 
-	local errorFrame = Instance.new("Frame", errGui)
-	errorFrame.Size = UDim2.new(0, 400, 0, 100)
-	errorFrame.Position = UDim2.new(0, 10, 1, -110)
-	errorFrame.BackgroundColor3 = Color3.fromRGB(170, 35, 35)
-	errorFrame.BorderSizePixel = 0
-
-	local corner = Instance.new("UICorner", errorFrame)
-	corner.CornerRadius = UDim.new(0, 12)
-
-	local errorLabel = Instance.new("TextLabel", errorFrame)
-	errorLabel.Size = UDim2.new(1, -20, 1, -20)
-	errorLabel.Position = UDim2.new(0, 10, 0, 10)
-	errorLabel.BackgroundTransparency = 1
-	errorLabel.TextColor3 = Color3.new(1, 1, 1)
-	errorLabel.Font = Enum.Font.FredokaOne
-	errorLabel.TextSize = 18
-	errorLabel.TextWrapped = true
-	errorLabel.Text = "Something seems to be off.\nDM leftpapi on Discord to get it fixed.\n\nError: " .. tostring(errMsg)
+-- Helper: try to set nice font, ignore if missing
+local function trySetFont(obj)
+	pcall(function()
+		obj.Font = Enum.Font.FredokaOne
+	end)
 end
 
--- Thanks popup for users
-local function thankYouPopup()
-	local tyGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-	tyGui.Name = "LeftInkThanks"
-	tyGui.ResetOnSpawn = false
-
-	local tyFrame = Instance.new("Frame", tyGui)
-	tyFrame.Size = UDim2.new(0, 190, 0, 40)
-	tyFrame.Position = UDim2.new(0.5, 0, 0, 10)
-	tyFrame.AnchorPoint = Vector2.new(0.5, 0)
-	tyFrame.BackgroundColor3 = Color3.fromRGB(60, 200, 100)
-	tyFrame.BackgroundTransparency = 0.2
-	tyFrame.BorderSizePixel = 0
-
-	local corner = Instance.new("UICorner", tyFrame)
-	corner.CornerRadius = UDim.new(0, 10)
-
-	local iconCircle = Instance.new("Frame", tyFrame)
-	iconCircle.Size = UDim2.new(0, 30, 0, 30)
-	iconCircle.Position = UDim2.new(0, 5, 0.5, -15)
-	iconCircle.BackgroundColor3 = Color3.new(1, 1, 1)
-	iconCircle.BorderSizePixel = 0
-
-	local iconCorner = Instance.new("UICorner", iconCircle)
-	iconCorner.CornerRadius = UDim.new(1, 0)
-
-	local iconLabel = Instance.new("TextLabel", iconCircle)
-	iconLabel.Size = UDim2.new(1, 0, 1, 0)
-	iconLabel.BackgroundTransparency = 1
-	iconLabel.Text = "i"
-	iconLabel.TextColor3 = Color3.new(0, 0, 0)
-	iconLabel.Font = Enum.Font.FredokaOne
-	iconLabel.TextSize = 20
-	iconLabel.Rotation = 180
-
-	local messageLabel = Instance.new("TextLabel", tyFrame)
-	messageLabel.Size = UDim2.new(1, -45, 1, 0)
-	messageLabel.Position = UDim2.new(0, 40, 0, 0)
-	messageLabel.BackgroundTransparency = 1
-	messageLabel.Text = "ty for using left ink :)"
-	messageLabel.TextColor3 = Color3.new(1, 1, 1)
-	messageLabel.Font = Enum.Font.FredokaOne
-	messageLabel.TextSize = 16
-	messageLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-	-- Simple fade in/out
-	TweenService:Create(tyFrame, TweenInfo.new(0.3), {BackgroundTransparency = 0.2}):Play()
-	task.wait(3)
-	TweenService:Create(tyFrame, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
-	task.wait(0.3)
-	tyGui:Destroy()
+-- Clamp function to keep values in range
+local function clamp(val, minVal, maxVal)
+	if val < minVal then return minVal end
+	if val > maxVal then return maxVal end
+	return val
 end
 
--- Create the main UI ScreenGui and draggable frame
-local mainScreenGui = Instance.new("ScreenGui")
-mainScreenGui.Name = "LeftInkMain"
-mainScreenGui.ResetOnSpawn = false
-mainScreenGui.Parent = player:WaitForChild("PlayerGui")
+-- Popup GUI at bottom-left near jump button
+local popupGui = Instance.new("ScreenGui")
+popupGui.Name = "LeftInkPopup"
+popupGui.ResetOnSpawn = false
+popupGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
-local mainFrame = Instance.new("Frame", mainScreenGui)
-mainFrame.Size = UDim2.new(0, 170, 0, 130)
-mainFrame.Position = UDim2.new(0.5, -85, 0.5, -65)
-mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+local popupFrame = Instance.new("Frame")
+popupFrame.Size = UDim2.new(0, 300, 0, 100)
+popupFrame.Position = UDim2.new(0, 10, 1, -120)
+popupFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+popupFrame.BackgroundTransparency = 0.15
+popupFrame.BorderSizePixel = 0
+popupFrame.Parent = popupGui
+
+local popupCorner = Instance.new("UICorner", popupFrame)
+popupCorner.CornerRadius = UDim.new(0, 12)
+
+local popupLabel = Instance.new("TextLabel")
+popupLabel.Size = UDim2.new(1, -20, 0, 40)
+popupLabel.Position = UDim2.new(0, 10, 0, 10)
+popupLabel.Text = "Load Left Ink Script?"
+popupLabel.TextColor3 = Color3.new(1,1,1)
+popupLabel.BackgroundTransparency = 1
+popupLabel.Parent = popupFrame
+trySetFont(popupLabel)
+popupLabel.TextSize = 20
+
+local yesBtn = Instance.new("TextButton")
+yesBtn.Size = UDim2.new(0, 120, 0, 30)
+yesBtn.Position = UDim2.new(0, 15, 1, -40)
+yesBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+yesBtn.TextColor3 = Color3.new(1,1,1)
+yesBtn.Text = "Yes"
+yesBtn.Parent = popupFrame
+trySetFont(yesBtn)
+yesBtn.TextSize = 18
+
+local noBtn = Instance.new("TextButton")
+noBtn.Size = UDim2.new(0, 120, 0, 30)
+noBtn.Position = UDim2.new(1, -135, 1, -40)
+noBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+noBtn.TextColor3 = Color3.new(1,1,1)
+noBtn.Text = "No"
+noBtn.Parent = popupFrame
+trySetFont(noBtn)
+noBtn.TextSize = 18
+
+-- Close popup safely
+local function closePopup()
+	if popupGui and popupGui.Parent then
+		popupGui:Destroy()
+	end
+end
+
+-- Main GUI setup (centered)
+local mainGui = Instance.new("ScreenGui")
+mainGui.Name = "LeftInkMain"
+mainGui.ResetOnSpawn = false
+mainGui.Parent = localPlayer:WaitForChild("PlayerGui")
+mainGui.Enabled = false
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 190, 0, 190) -- taller to fit FOV input nicely
+mainFrame.Position = UDim2.new(0.5, -95, 0.5, -95)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BackgroundTransparency = 0.2
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
 mainFrame.Draggable = true
+mainFrame.Parent = mainGui
 
-local bgGradient = Instance.new("UIGradient", mainFrame)
-bgGradient.Color = ColorSequence.new{
-	ColorSequenceKeypoint.new(0, Color3.new(0, 0, 0)),
-	ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
-}
-bgGradient.Rotation = 90
+local mainCorner = Instance.new("UICorner", mainFrame)
+mainCorner.CornerRadius = UDim.new(0, 8)
 
-local headerLabel = Instance.new("TextLabel", mainFrame)
-headerLabel.Size = UDim2.new(1, 0, 0, 25)
-headerLabel.Text = "Left Ink"
-headerLabel.TextColor3 = Color3.new(1, 1, 1)
-headerLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-headerLabel.Font = Enum.Font.FredokaOne
-headerLabel.TextSize = 18
-headerLabel.BorderSizePixel = 0
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 30)
+titleLabel.Position = UDim2.new(0, 0, 0, 0)
+titleLabel.Text = "Left Ink"
+titleLabel.TextColor3 = Color3.new(1, 1, 1)
+titleLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+titleLabel.BorderSizePixel = 0
+titleLabel.TextSize = 20
+titleLabel.Font = Enum.Font.FredokaOne
+titleLabel.Parent = mainFrame
 
--- Function to create toggles in the GUI
-local function makeToggle(labelText, yPos, onToggle)
-	local toggleBtn = Instance.new("TextButton", mainFrame)
-	toggleBtn.Size = UDim2.new(1, -10, 0, 30)
-	toggleBtn.Position = UDim2.new(0, 5, 0, yPos)
-	toggleBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-	toggleBtn.TextColor3 = Color3.new(1, 1, 1)
-	toggleBtn.Font = Enum.Font.FredokaOne
-	toggleBtn.TextSize = 16
-	toggleBtn.Text = labelText .. " [OFF]"
+local function createToggle(text, parent, posY, onToggle)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -20, 0, 30)
+	btn.Position = UDim2.new(0, 10, 0, posY)
+	btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.Font = Enum.Font.FredokaOne
+	btn.TextSize = 16
+	btn.Text = text .. " [OFF]"
+	btn.Parent = parent
 
-	toggleBtn.MouseButton1Click:Connect(function()
-		local isOff = toggleBtn.Text:find("OFF") ~= nil
-		toggleBtn.Text = labelText .. (isOff and " [ON]" or " [OFF]")
-		onToggle(isOff)
+	btn.MouseEnter:Connect(function()
+		btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
 	end)
+	btn.MouseLeave:Connect(function()
+		btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	end)
+
+	btn.MouseButton1Click:Connect(function()
+		local enabled = btn.Text:find("OFF") ~= nil
+		btn.Text = text .. (enabled and " [ON]" or " [OFF]")
+		onToggle(enabled)
+	end)
+
+	return btn
 end
 
--- Aimbot toggle
-makeToggle("Aimbot", 30, function(enabled)
-	isAimEnabled = enabled
+local yPos = 40
+local espToggle = createToggle("ESP", mainFrame, yPos, function(state)
+	espOn = state
+end)
+yPos = yPos + 40
+local aimToggle = createToggle("Aimbot", mainFrame, yPos, function(state)
+	aimOn = state
+end)
+yPos = yPos + 45
+
+-- FOV label
+local fovLabel = Instance.new("TextLabel")
+fovLabel.Size = UDim2.new(1, -20, 0, 25)
+fovLabel.Position = UDim2.new(0, 10, 0, yPos)
+fovLabel.BackgroundTransparency = 1
+fovLabel.TextColor3 = Color3.new(1, 1, 1)
+fovLabel.Font = Enum.Font.FredokaOne
+fovLabel.TextSize = 16
+fovLabel.Text = "Camera FOV: " .. math.floor(currentFOV)
+fovLabel.Parent = mainFrame
+yPos = yPos + 25
+
+-- FOV slider background (resized to fit)
+local fovSlider = Instance.new("ImageButton")
+fovSlider.Size = UDim2.new(1, -20, 0, 20)
+fovSlider.Position = UDim2.new(0, 10, 0, yPos)
+fovSlider.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+fovSlider.AutoButtonColor = false
+fovSlider.Parent = mainFrame
+
+local sliderCorner = Instance.new("UICorner", fovSlider)
+sliderCorner.CornerRadius = UDim.new(0, 5)
+
+local sliderFill = Instance.new("Frame", fovSlider)
+sliderFill.Size = UDim2.new((currentFOV/120), 0, 1, 0)
+sliderFill.BackgroundColor3 = Color3.fromRGB(100, 220, 100)
+sliderFill.BorderSizePixel = 0
+
+-- FOV input box under slider
+local fovInput = Instance.new("TextBox")
+fovInput.Size = UDim2.new(1, -20, 0, 25)
+fovInput.Position = UDim2.new(0, 10, 0, yPos + 25)
+fovInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+fovInput.TextColor3 = Color3.new(1, 1, 1)
+fovInput.ClearTextOnFocus = false
+fovInput.Font = Enum.Font.FredokaOne
+fovInput.TextSize = 16
+fovInput.Text = tostring(math.floor(currentFOV))
+fovInput.PlaceholderText = "Enter FOV (1-120)"
+fovInput.Parent = mainFrame
+
+local draggingSlider = false
+
+local function updateFOV(x)
+	local relativeX = math.clamp(x - fovSlider.AbsolutePosition.X, 0, fovSlider.AbsoluteSize.X)
+	local ratio = relativeX / fovSlider.AbsoluteSize.X
+	currentFOV = clamp(ratio * 120, 1, 120)
+	camera.FieldOfView = currentFOV
+	sliderFill.Size = UDim2.new(ratio, 0, 1, 0)
+	fovLabel.Text = "Camera FOV: " .. math.floor(currentFOV)
+	fovInput.Text = tostring(math.floor(currentFOV))
+end
+
+fovSlider.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		draggingSlider = true
+		updateFOV(input.Position.X)
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				draggingSlider = false
+			end
+		end)
+	end
 end)
 
--- ESP toggle
-makeToggle("ESP", 65, function(enabled)
-	isESPEnabled = enabled
+fovSlider.InputChanged:Connect(function(input)
+	if draggingSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		updateFOV(input.Position.X)
+	end
 end)
 
--- Always visible toggle button for main GUI
-local toggleGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+fovInput.FocusLost:Connect(function(enterPressed)
+	if enterPressed then
+		local val = tonumber(fovInput.Text)
+		if val then
+			val = clamp(val, 1, 120)
+			currentFOV = val
+			camera.FieldOfView = currentFOV
+			fovLabel.Text = "Camera FOV: " .. math.floor(currentFOV)
+			sliderFill.Size = UDim2.new(currentFOV/120, 0, 1, 0)
+			fovInput.Text = tostring(math.floor(currentFOV))
+		else
+			fovInput.Text = tostring(math.floor(currentFOV))
+		end
+	end
+end)
+
+-- Open/close toggle button (fixed near top-left but slightly right)
+local toggleGui = Instance.new("ScreenGui")
 toggleGui.Name = "LeftInkToggle"
 toggleGui.ResetOnSpawn = false
+toggleGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
-local toggleButton = Instance.new("ImageButton", toggleGui)
-toggleButton.Size = UDim2.new(0, 40, 0, 40)
-toggleButton.Position = UDim2.new(0, 10, 0, 10)
-toggleButton.Image = "rbxassetid://118783379027658"
+local toggleButton = Instance.new("ImageButton")
+toggleButton.Size = UDim2.new(0, 50, 0, 50)
+toggleButton.Position = UDim2.new(0, 25, 0, 10)
 toggleButton.BackgroundTransparency = 1
-toggleButton.ZIndex = 10
+toggleButton.Image = "rbxassetid://93809332227567" -- Your asset id here
+toggleButton.Parent = toggleGui
+
+local toggleCorner = Instance.new("UICorner", toggleButton)
+toggleCorner.CornerRadius = UDim.new(0, 12)
 
 toggleButton.MouseButton1Click:Connect(function()
-	mainScreenGui.Enabled = not mainScreenGui.Enabled
+	mainGui.Enabled = not mainGui.Enabled
 end)
 
--- Prompt popup asking to load the main GUI
-local function showLoadPrompt()
-	local promptGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-	promptGui.Name = "LeftInkPrompt"
-	promptGui.ResetOnSpawn = false
-	promptGui.IgnoreGuiInset = true
+-- ESP support
+local espBoxes = {}
 
-	local promptFrame = Instance.new("Frame", promptGui)
-	promptFrame.Size = UDim2.new(0, 310, 0, 80)
-	promptFrame.Position = UDim2.new(1, 330, 1, -90)
-	promptFrame.AnchorPoint = Vector2.new(1, 1)
-	promptFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-	promptFrame.BorderSizePixel = 0
-
-	local corner = Instance.new("UICorner", promptFrame)
-	corner.CornerRadius = UDim.new(0, 8)
-
-	local icon = Instance.new("ImageLabel", promptFrame)
-	icon.Size = UDim2.new(0, 60, 0, 60)
-	icon.Position = UDim2.new(0, 10, 0, 10)
-	icon.Image = "rbxassetid://118783379027658"
-	icon.BackgroundTransparency = 1
-
-	local questionLabel = Instance.new("TextLabel", promptFrame)
-	questionLabel.Size = UDim2.new(1, -90, 0, 40)
-	questionLabel.Position = UDim2.new(0, 80, 0, 5)
-	questionLabel.BackgroundTransparency = 1
-	questionLabel.Text = "Load Left Ink Script?"
-	questionLabel.TextColor3 = Color3.new(1, 1, 1)
-	questionLabel.Font = Enum.Font.FredokaOne
-	questionLabel.TextSize = 18
-	questionLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-	local yesButton = Instance.new("TextButton", promptFrame)
-	yesButton.Text = "Yes"
-	yesButton.Size = UDim2.new(0, 90, 0, 25)
-	yesButton.Position = UDim2.new(0, 80, 0, 50)
-	yesButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-	yesButton.TextColor3 = Color3.new(1, 1, 1)
-	yesButton.Font = Enum.Font.FredokaOne
-	yesButton.TextSize = 16
-
-	local noButton = Instance.new("TextButton", promptFrame)
-	noButton.Text = "No"
-	noButton.Size = UDim2.new(0, 90, 0, 25)
-	noButton.Position = UDim2.new(0, 180, 0, 50)
-	noButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-	noButton.TextColor3 = Color3.new(1, 1, 1)
-	noButton.Font = Enum.Font.FredokaOne
-	noButton.TextSize = 16
-
-	TweenService:Create(promptFrame, TweenInfo.new(0.35), {
-		Position = UDim2.new(1, -10, 1, -90)
-	}):Play()
-
-	local function closePrompt()
-		TweenService:Create(promptFrame, TweenInfo.new(0.3), {
-			Position = UDim2.new(1, 330, 1, -90)
-		}):Play()
-		task.wait(0.3)
-		promptGui:Destroy()
+local function clearESP()
+	for model, box in pairs(espBoxes) do
+		if box and box.Parent then
+			box:Destroy()
+		end
+		espBoxes[model] = nil
 	end
-
-	yesButton.MouseButton1Click:Connect(function()
-		closePrompt()
-		local success, err = pcall(function()
-			mainScreenGui.Enabled = true
-			thankYouPopup()
-		end)
-		if not success then
-			displayError(err)
-		end
-	end)
-
-	noButton.MouseButton1Click:Connect(closePrompt)
-
-	task.delay(10, function()
-		if promptGui and promptGui.Parent then
-			closePrompt()
-		end
-	end)
 end
 
--- Start by hiding main GUI
-mainScreenGui.Enabled = false
-
--- Launch prompt safely
-local ok, err = pcall(showLoadPrompt)
-if not ok then
-	displayError(err)
+local function attachESP(model, part)
+	if espBoxes[model] then return end
+	local box = Instance.new("BoxHandleAdornment")
+	box.Name = "LeftInkESP"
+	box.Adornee = part
+	box.Size = part.Size
+	box.Color3 = Color3.fromRGB(255, 0, 0)
+	box.Transparency = 0.3
+	box.ZIndex = 10
+	box.AlwaysOnTop = true
+	box.AdornCullingMode = Enum.AdornCullingMode.Never
+	box.Parent = part
+	espBoxes[model] = box
 end
 
--- Main loop for Aimbot and ESP
+local function isGuard(model)
+	if not model or not model:IsA("Model") then return false end
+	local lowerName = model.Name:lower()
+	if lowerName:find("guard") or lowerName:find("squid") or lowerName:find("guy") then
+		return true
+	end
+	return false
+end
+
+local function getRootPart(model)
+	if not model then return nil end
+	for _, part in pairs(model:GetChildren()) do
+		if part:IsA("BasePart") and part.Name == "HumanoidRootPart" then
+			return part
+		end
+	end
+	return nil
+end
+
+-- Aim target tracking
+local currentTarget = nil
+
 RunService.RenderStepped:Connect(function()
-	local character = player.Character
-	if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-	if not mainScreenGui.Enabled then return end
+	local char = localPlayer.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+	local root = char.HumanoidRootPart
 
-	local rootPart = character.HumanoidRootPart
-	local nearestTarget = nil
-	local nearestDistance = math.huge
-
-	for _, model in ipairs(Workspace:GetDescendants()) do
-		if model:IsA("Model") and not model:IsDescendantOf(Players) and not model:IsDescendantOf(character) then
-			local modelName = model.Name:lower()
-			if modelName:find("guard") or modelName:find("guy") or modelName:find("squid") then
-				local mainPart = model:FindFirstChildWhichIsA("BasePart")
-				if mainPart then
-					local dist = (mainPart.Position - rootPart.Position).Magnitude
-					if dist < nearestDistance then
-						nearestTarget = mainPart
-						nearestDistance = dist
-					end
-
-					if isESPEnabled and not model:FindFirstChild("ESP") then
-						local box = Instance.new("BoxHandleAdornment")
-						box.Name = "ESP"
-						box.Adornee = mainPart
-						box.Size = mainPart.Size
-						box.Color3 = Color3.fromRGB(255, 0, 0)
-						box.Transparency = 0.25
-						box.ZIndex = 10
-						box.AlwaysOnTop = true
-						box.AdornCullingMode = Enum.AdornCullingMode.Never
-						box.Parent = mainPart
-					end
+	-- Clean up ESP if off
+	if not espOn then
+		clearESP()
+	else
+		-- Attach ESP to guards
+		for _, model in pairs(Workspace:GetChildren()) do
+			if isGuard(model) then
+				local rootPart = getRootPart(model)
+				if rootPart then
+					attachESP(model, rootPart)
 				end
 			end
 		end
 	end
 
-	if isAimEnabled and nearestTarget then
-		local direction = (nearestTarget.Position - camera.CFrame.Position).Unit
-		local targetCF = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + direction)
-		camera.CFrame = camera.CFrame:Lerp(targetCF, AIM_SPEED)
+	-- Aim logic
+	if aimOn then
+		local bestTarget = nil
+		local bestDist = math.huge
+		for _, model in pairs(Workspace:GetChildren()) do
+			if isGuard(model) then
+				local rootPart = getRootPart(model)
+				if rootPart then
+					local dist = (rootPart.Position - root.Position).Magnitude
+					if dist < bestDist then
+						bestDist = dist
+						bestTarget = rootPart
+					end
+				end
+			end
+		end
+		if bestTarget then
+			currentTarget = bestTarget
+			local dir = (currentTarget.Position - camera.CFrame.Position).Unit
+			local newCFrame = CFrame.new(camera.CFrame.Position, camera.CFrame.Position + dir)
+			camera.CFrame = camera.CFrame:Lerp(newCFrame, AIM_SPEED)
+		else
+			currentTarget = nil
+		end
+	else
+		currentTarget = nil
+	end
+end)
+
+-- Close popup when Yes or No clicked or after timeout
+yesBtn.MouseButton1Click:Connect(function()
+	closePopup()
+	mainGui.Enabled = true
+end)
+
+noBtn.MouseButton1Click:Connect(function()
+	closePopup()
+end)
+
+task.delay(10, function()
+	closePopup()
+end)
+
+-- Thank you popup after main GUI enabled
+local function showThanks()
+	local thanksGui = Instance.new("ScreenGui")
+	thanksGui.Name = "LeftInkThanks"
+	thanksGui.ResetOnSpawn = false
+	thanksGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+	local thanksFrame = Instance.new("Frame")
+	thanksFrame.Size = UDim2.new(0, 220, 0, 40)
+	thanksFrame.Position = UDim2.new(0.5, -110, 0, 20)
+	thanksFrame.BackgroundColor3 = Color3.fromRGB(0, 160, 0)
+	thanksFrame.BackgroundTransparency = 0.4
+	thanksFrame.BorderSizePixel = 0
+	thanksFrame.Parent = thanksGui
+
+	local thanksCorner = Instance.new("UICorner", thanksFrame)
+	thanksCorner.CornerRadius = UDim.new(0, 10)
+
+	local infoCircle = Instance.new("Frame")
+	infoCircle.Size = UDim2.new(0, 26, 1, 0)
+	infoCircle.Position = UDim2.new(0, 7, 0, 0)
+	infoCircle.BackgroundColor3 = Color3.new(1, 1, 1)
+	infoCircle.BorderSizePixel = 0
+	infoCircle.Parent = thanksFrame
+
+	local infoCorner = Instance.new("UICorner", infoCircle)
+	infoCorner.CornerRadius = UDim.new(0, 13)
+
+	local infoLabel = Instance.new("TextLabel")
+	infoLabel.Size = UDim2.new(1, 0, 1, 0)
+	infoLabel.BackgroundTransparency = 1
+	infoLabel.Text = "ᴉ" -- upside down i
+	infoLabel.Font = Enum.Font.FredokaOne
+	infoLabel.TextSize = 24
+	infoLabel.TextColor3 = Color3.fromRGB(0, 160, 0)
+	infoLabel.TextStrokeTransparency = 0.9
+	infoLabel.Parent = infoCircle
+
+	local thanksLabel = Instance.new("TextLabel")
+	thanksLabel.Size = UDim2.new(1, -38, 1, 0)
+	thanksLabel.Position = UDim2.new(0, 35, 0, 0)
+	thanksLabel.BackgroundTransparency = 1
+	thanksLabel.TextColor3 = Color3.new(1, 1, 1)
+	thanksLabel.Font = Enum.Font.FredokaOne
+	thanksLabel.TextSize = 18
+	thanksLabel.Text = "ty for using left ink :)"
+	thanksLabel.Parent = thanksFrame
+
+	task.delay(4, function()
+		if thanksGui and thanksGui.Parent then
+			thanksGui:Destroy()
+		end
+	end)
+end
+
+mainGui:GetPropertyChangedSignal("Enabled"):Connect(function()
+	if mainGui.Enabled then
+		showThanks()
 	end
 end)
