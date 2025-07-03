@@ -1,94 +1,134 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
--- Aimbot settings
 local AIM_SPEED = 0.1
 local espEnabled = false
 local aimEnabled = false
 
--- Function to show red error notification
 local function showError(message)
-	local gui = Instance.new("ScreenGui")
+	local gui = Instance.new("ScreenGui", localPlayer:WaitForChild("PlayerGui"))
 	gui.Name = "ErrorOverlay"
 	gui.ResetOnSpawn = false
-	gui.Parent = localPlayer:WaitForChild("PlayerGui")
 
-	local frame = Instance.new("Frame")
+	local frame = Instance.new("Frame", gui)
 	frame.Size = UDim2.new(0, 400, 0, 100)
 	frame.Position = UDim2.new(0, 10, 1, -110)
 	frame.BackgroundColor3 = Color3.fromRGB(170, 35, 35)
 	frame.BorderSizePixel = 0
-	frame.Parent = gui
 
-	local corner = Instance.new("UICorner")
+	local corner = Instance.new("UICorner", frame)
 	corner.CornerRadius = UDim.new(0, 12)
-	corner.Parent = frame
 
-	local label = Instance.new("TextLabel")
+	local label = Instance.new("TextLabel", frame)
 	label.Size = UDim2.new(1, -20, 1, -20)
 	label.Position = UDim2.new(0, 10, 0, 10)
 	label.BackgroundTransparency = 1
 	label.TextColor3 = Color3.new(1, 1, 1)
-	label.Font = Enum.Font.SourceSansBold
+	label.Font = Enum.Font.FredokaOne
 	label.TextSize = 18
 	label.TextWrapped = true
 	label.Text = "Something seems to be off.\nDM leftpapi on Discord to get it fixed.\n\nError: " .. tostring(message)
-	label.Parent = frame
 end
 
--- Main GUI builder
-local function setupInterface()
-	local mainGui = Instance.new("ScreenGui")
-	mainGui.Name = "Left Ink"
-	mainGui.ResetOnSpawn = false
-	mainGui.Parent = localPlayer:WaitForChild("PlayerGui")
+local function showThankYou()
+	local gui = Instance.new("ScreenGui", localPlayer:WaitForChild("PlayerGui"))
+	gui.Name = "ThankYouGui"
+	gui.ResetOnSpawn = false
 
-	local frame = Instance.new("Frame")
+	local frame = Instance.new("Frame", gui)
+	frame.Size = UDim2.new(0, 190, 0, 40)
+	frame.Position = UDim2.new(0.5, 0, 0, 20)
+	frame.AnchorPoint = Vector2.new(0.5, 0)
+	frame.BackgroundColor3 = Color3.fromRGB(60, 200, 100)
+	frame.BackgroundTransparency = 0.2
+	frame.BorderSizePixel = 0
+
+	local corner = Instance.new("UICorner", frame)
+	corner.CornerRadius = UDim.new(0, 10)
+
+	local iconCircle = Instance.new("Frame", frame)
+	iconCircle.Size = UDim2.new(0, 30, 0, 30)
+	iconCircle.Position = UDim2.new(0, 5, 0.5, -15)
+	iconCircle.BackgroundColor3 = Color3.new(1, 1, 1)
+	iconCircle.BorderSizePixel = 0
+
+	local iconCorner = Instance.new("UICorner", iconCircle)
+	iconCorner.CornerRadius = UDim.new(1, 0)
+
+	local iconLabel = Instance.new("TextLabel", iconCircle)
+	iconLabel.Size = UDim2.new(1, 0, 1, 0)
+	iconLabel.BackgroundTransparency = 1
+	iconLabel.Text = "i"
+	iconLabel.TextColor3 = Color3.new(0, 0, 0)
+	iconLabel.Font = Enum.Font.FredokaOne
+	iconLabel.TextSize = 20
+	iconLabel.Rotation = 180
+
+	local msg = Instance.new("TextLabel", frame)
+	msg.Size = UDim2.new(1, -45, 1, 0)
+	msg.Position = UDim2.new(0, 40, 0, 0)
+	msg.BackgroundTransparency = 1
+	msg.Text = "ty for using left ink :)"
+	msg.TextColor3 = Color3.new(1, 1, 1)
+	msg.Font = Enum.Font.FredokaOne
+	msg.TextSize = 16
+	msg.TextXAlignment = Enum.TextXAlignment.Left
+
+	TweenService:Create(frame, TweenInfo.new(0.3), {BackgroundTransparency = 0.2}):Play()
+	task.wait(3)
+	TweenService:Create(frame, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
+	task.wait(0.3)
+	gui:Destroy()
+end
+
+local function setupInterface()
+	local gui = Instance.new("ScreenGui", localPlayer:WaitForChild("PlayerGui"))
+	gui.Name = "Left Ink"
+	gui.ResetOnSpawn = false
+
+	local frame = Instance.new("Frame", gui)
 	frame.Size = UDim2.new(0, 170, 0, 130)
 	frame.Position = UDim2.new(0, 10, 0, 200)
 	frame.BackgroundColor3 = Color3.new(0, 0, 0)
 	frame.BorderSizePixel = 0
 	frame.Active = true
 	frame.Draggable = true
-	frame.Parent = mainGui
 
-	local gradient = Instance.new("UIGradient")
+	local gradient = Instance.new("UIGradient", frame)
 	gradient.Color = ColorSequence.new{
 		ColorSequenceKeypoint.new(0, Color3.new(0, 0, 0)),
 		ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1))
 	}
 	gradient.Rotation = 90
-	gradient.Parent = frame
 
 	local title = Instance.new("TextLabel", frame)
 	title.Size = UDim2.new(1, 0, 0, 25)
-	title.Text = "Ink Guard Hub"
+	title.Text = "Left Ink"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-	title.Font = Enum.Font.SourceSansBold
+	title.Font = Enum.Font.FredokaOne
 	title.TextSize = 18
 	title.BorderSizePixel = 0
 
-	local function createToggle(name, posY, callback)
-		local toggle = Instance.new("TextButton")
+	local function createToggle(name, yPos, callback)
+		local toggle = Instance.new("TextButton", frame)
 		toggle.Size = UDim2.new(1, -10, 0, 30)
-		toggle.Position = UDim2.new(0, 5, 0, posY)
+		toggle.Position = UDim2.new(0, 5, 0, yPos)
 		toggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 		toggle.TextColor3 = Color3.new(1, 1, 1)
-		toggle.Font = Enum.Font.SourceSansBold
+		toggle.Font = Enum.Font.FredokaOne
 		toggle.TextSize = 16
 		toggle.Text = name .. " [OFF]"
-		toggle.Parent = frame
 
 		toggle.MouseButton1Click:Connect(function()
-			local active = toggle.Text:find("OFF") ~= nil
-			toggle.Text = name .. (active and " [ON]" or " [OFF]")
-			callback(active)
+			local state = toggle.Text:find("OFF") ~= nil
+			toggle.Text = name .. (state and " [ON]" or " [OFF]")
+			callback(state)
 		end)
 	end
 
@@ -100,144 +140,131 @@ local function setupInterface()
 		espEnabled = state
 	end)
 
-	local toggleGui = Instance.new("ScreenGui")
-	toggleGui.Name = "LeftInkButtonGui"
-	toggleGui.ResetOnSpawn = false
-	toggleGui.Parent = localPlayer:WaitForChild("PlayerGui")
+	local btnGui = Instance.new("ScreenGui", localPlayer:WaitForChild("PlayerGui"))
+	btnGui.Name = "LeftInkIconGui"
+	btnGui.ResetOnSpawn = false
 
-	local toggleBtn = Instance.new("ImageButton")
+	local toggleBtn = Instance.new("ImageButton", btnGui)
 	toggleBtn.Size = UDim2.new(0, 40, 0, 40)
 	toggleBtn.Position = UDim2.new(0, 10, 0, 10)
 	toggleBtn.Image = "rbxassetid://118783379027658"
 	toggleBtn.BackgroundTransparency = 1
-	toggleBtn.Parent = toggleGui
 
 	toggleBtn.MouseButton1Click:Connect(function()
 		frame.Visible = not frame.Visible
 	end)
 end
 
--- GUI request popup
 local function launchPrompt()
-	local gui = Instance.new("ScreenGui")
+	local gui = Instance.new("ScreenGui", localPlayer:WaitForChild("PlayerGui"))
 	gui.Name = "InkPromptGui"
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = true
-	gui.Parent = localPlayer:WaitForChild("PlayerGui")
 
-	local container = Instance.new("Frame")
-	container.Size = UDim2.new(0, 310, 0, 80)
-	container.Position = UDim2.new(1, 330, 1, -90)
-	container.AnchorPoint = Vector2.new(1, 1)
-	container.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-	container.BorderSizePixel = 0
-	container.Parent = gui
+	local frame = Instance.new("Frame", gui)
+	frame.Size = UDim2.new(0, 310, 0, 80)
+	frame.Position = UDim2.new(1, 330, 1, -90)
+	frame.AnchorPoint = Vector2.new(1, 1)
+	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	frame.BorderSizePixel = 0
 
-	local corner = Instance.new("UICorner")
+	local corner = Instance.new("UICorner", frame)
 	corner.CornerRadius = UDim.new(0, 8)
-	corner.Parent = container
 
-	local icon = Instance.new("ImageLabel")
+	local icon = Instance.new("ImageLabel", frame)
 	icon.Size = UDim2.new(0, 60, 0, 60)
 	icon.Position = UDim2.new(0, 10, 0, 10)
 	icon.Image = "rbxassetid://118783379027658"
 	icon.BackgroundTransparency = 1
-	icon.Parent = container
 
-	local question = Instance.new("TextLabel")
+	local question = Instance.new("TextLabel", frame)
 	question.Size = UDim2.new(1, -90, 0, 40)
 	question.Position = UDim2.new(0, 80, 0, 5)
 	question.BackgroundTransparency = 1
 	question.Text = "Load Left Ink Script?"
 	question.TextColor3 = Color3.new(1, 1, 1)
-	question.Font = Enum.Font.SourceSansBold
+	question.Font = Enum.Font.FredokaOne
 	question.TextSize = 18
 	question.TextXAlignment = Enum.TextXAlignment.Left
-	question.Parent = container
 
-	local yesBtn = Instance.new("TextButton")
+	local yesBtn = Instance.new("TextButton", frame)
 	yesBtn.Text = "Yes"
 	yesBtn.Size = UDim2.new(0, 90, 0, 25)
 	yesBtn.Position = UDim2.new(0, 80, 0, 50)
 	yesBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
 	yesBtn.TextColor3 = Color3.new(1, 1, 1)
-	yesBtn.Font = Enum.Font.SourceSansBold
+	yesBtn.Font = Enum.Font.FredokaOne
 	yesBtn.TextSize = 16
-	yesBtn.Parent = container
 
-	local noBtn = Instance.new("TextButton")
+	local noBtn = Instance.new("TextButton", frame)
 	noBtn.Text = "No"
 	noBtn.Size = UDim2.new(0, 90, 0, 25)
 	noBtn.Position = UDim2.new(0, 180, 0, 50)
 	noBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 	noBtn.TextColor3 = Color3.new(1, 1, 1)
-	noBtn.Font = Enum.Font.SourceSansBold
+	noBtn.Font = Enum.Font.FredokaOne
 	noBtn.TextSize = 16
-	noBtn.Parent = container
 
-	TweenService:Create(container, TweenInfo.new(0.35), {
+	TweenService:Create(frame, TweenInfo.new(0.35), {
 		Position = UDim2.new(1, -10, 1, -90)
 	}):Play()
 
-	local function closePopup()
-		local out = TweenService:Create(container, TweenInfo.new(0.3), {
+	local function close()
+		TweenService:Create(frame, TweenInfo.new(0.3), {
 			Position = UDim2.new(1, 330, 1, -90)
-		})
-		out:Play()
-		out.Completed:Wait()
+		}):Play()
+		task.wait(0.3)
 		gui:Destroy()
 	end
 
 	yesBtn.MouseButton1Click:Connect(function()
-		closePopup()
-		local success, err = pcall(setupInterface)
-		if not success then
+		close()
+		local ok, err = pcall(setupInterface)
+		if not ok then
 			showError(err)
+		else
+			showThankYou()
 		end
 	end)
 
-	noBtn.MouseButton1Click:Connect(function()
-		closePopup()
-	end)
-
+	noBtn.MouseButton1Click:Connect(close)
 	task.delay(10, function()
 		if gui and gui.Parent then
-			closePopup()
+			close()
 		end
 	end)
 end
 
--- Render aimbot and ESP loop
 RunService.RenderStepped:Connect(function()
 	local char = localPlayer.Character
 	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
 
+	local root = char.HumanoidRootPart
 	local closest, distance = nil, math.huge
-	local hrp = char:FindFirstChild("HumanoidRootPart")
 
-	for _, model in ipairs(Workspace:GetDescendants()) do
-		if model:IsA("Model") and not model:IsDescendantOf(Players) and not model:IsDescendantOf(char) then
-			local lower = model.Name:lower()
-			if lower:find("guard") or lower:find("guy") or lower:find("squid") then
-				local root = model:FindFirstChildWhichIsA("BasePart")
-				if root then
-					local d = (root.Position - hrp.Position).Magnitude
+	for _, m in ipairs(Workspace:GetDescendants()) do
+		if m:IsA("Model") and not m:IsDescendantOf(Players) and not m:IsDescendantOf(char) then
+			local n = m.Name:lower()
+			if n:find("guard") or n:find("guy") or n:find("squid") then
+				local p = m:FindFirstChildWhichIsA("BasePart")
+				if p then
+					local d = (p.Position - root.Position).Magnitude
 					if d < distance then
-						closest = root
+						closest = p
 						distance = d
 					end
 
-					if espEnabled and not model:FindFirstChild("ESP") then
+					if espEnabled and not m:FindFirstChild("ESP") then
 						local box = Instance.new("BoxHandleAdornment")
 						box.Name = "ESP"
-						box.Adornee = root
-						box.Size = root.Size
+						box.Adornee = p
+						box.Size = p.Size
 						box.Color3 = Color3.fromRGB(255, 0, 0)
 						box.AlwaysOnTop = true
 						box.ZIndex = 10
 						box.Transparency = 0.25
 						box.AdornCullingMode = Enum.AdornCullingMode.Never
-						box.Parent = root
+						box.Parent = p
 					end
 				end
 			end
@@ -247,13 +274,11 @@ RunService.RenderStepped:Connect(function()
 	if aimEnabled and closest then
 		local camPos = camera.CFrame.Position
 		local look = (closest.Position - camPos).Unit
-		local goal = CFrame.new(camPos, camPos + look)
-		camera.CFrame = camera.CFrame:Lerp(goal, AIM_SPEED)
+		camera.CFrame = camera.CFrame:Lerp(CFrame.new(camPos, camPos + look), AIM_SPEED)
 	end
 end)
 
--- Run the popup safely
-local success, result = pcall(launchPrompt)
-if not success then
-	showError(result)
+local ok, err = pcall(launchPrompt)
+if not ok then
+	showError(err)
 end
