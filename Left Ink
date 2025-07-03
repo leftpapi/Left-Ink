@@ -10,6 +10,8 @@ local AIM_SPEED = 0.1
 local espEnabled = false
 local aimEnabled = false
 
+local frameVisible = true
+
 local function showError(message)
 	local gui = Instance.new("ScreenGui", localPlayer:WaitForChild("PlayerGui"))
 	gui.Name = "ErrorOverlay"
@@ -42,7 +44,7 @@ local function showThankYou()
 
 	local frame = Instance.new("Frame", gui)
 	frame.Size = UDim2.new(0, 190, 0, 40)
-	frame.Position = UDim2.new(0.5, 0, 0, 20)
+	frame.Position = UDim2.new(0.5, 0, 0, 10) -- raised higher
 	frame.AnchorPoint = Vector2.new(0.5, 0)
 	frame.BackgroundColor3 = Color3.fromRGB(60, 200, 100)
 	frame.BackgroundTransparency = 0.2
@@ -93,7 +95,8 @@ local function setupInterface()
 
 	local frame = Instance.new("Frame", gui)
 	frame.Size = UDim2.new(0, 170, 0, 130)
-	frame.Position = UDim2.new(0, 10, 0, 200)
+	frame.Position = UDim2.new(0.5, -85, 0.5, -65) -- centered on screen
+	frame.AnchorPoint = Vector2.new(0, 0)
 	frame.BackgroundColor3 = Color3.new(0, 0, 0)
 	frame.BorderSizePixel = 0
 	frame.Active = true
@@ -140,6 +143,7 @@ local function setupInterface()
 		espEnabled = state
 	end)
 
+	-- Toggle button to open/close main GUI
 	local btnGui = Instance.new("ScreenGui", localPlayer:WaitForChild("PlayerGui"))
 	btnGui.Name = "LeftInkIconGui"
 	btnGui.ResetOnSpawn = false
@@ -149,6 +153,8 @@ local function setupInterface()
 	toggleBtn.Position = UDim2.new(0, 10, 0, 10)
 	toggleBtn.Image = "rbxassetid://118783379027658"
 	toggleBtn.BackgroundTransparency = 1
+	toggleBtn.Visible = true
+	toggleBtn.ZIndex = 10
 
 	toggleBtn.MouseButton1Click:Connect(function()
 		frame.Visible = not frame.Visible
