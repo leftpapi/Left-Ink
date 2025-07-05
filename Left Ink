@@ -1,1 +1,393 @@
-loadstring("\112\114\105\110\116\40\34\32\89\79\85\82\32\83\67\82\73\80\84\32\72\69\82\69\33\33\32\34\41\10")()
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInput = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+-- Player references
+local player = Players.LocalPlayer
+local cam = Workspace.CurrentCamera
+local guiParent = player:WaitForChild("PlayerGui")
+
+-- Settings
+local AIM_LERP_SPEED = 0.1
+local isEspOn = false
+local isAimbotOn = false
+local isInfiniteJumpOn = false
+local walkSpeed = 28
+
+-- Utility: Show error message overlay
+local function showErrorOverlay(errMsg)
+	local screenGui = Instance.new("ScreenGui", guiParent)
+	screenGui.Name = "ErrorOverlay"
+	screenGui.ResetOnSpawn = false
+
+	local frame = Instance.new("Frame", screenGui)
+	frame.Size = UDim2.new(0, 400, 0, 100)
+	frame.Position = UDim2.new(0, 10, 1, -110)
+	frame.BackgroundColor3 = Color3.fromRGB(170, 35, 35)
+	frame.BorderSizePixel = 0
+
+	local corner = Instance.new("UICorner", frame)
+	corner.CornerRadius = UDim.new(0, 12)
+
+	local label = Instance.new("TextLabel", frame)
+	label.Size = UDim2.new(1, -20, 1, -20)
+	label.Position = UDim2.new(0, 10, 0, 10)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Font = Enum.Font.FredokaOne
+	label.TextSize = 18
+	label.TextWrapped = true
+	label.Text = ("Something seems off.\nDM leftpapi on Discord for help.\n\nError: %s"):format(tostring(errMsg))
+end
+
+-- Utility: Show thank you popup
+local function showThankYouMsg()
+	local screenGui = Instance.new("ScreenGui", guiParent)
+	screenGui.Name = "ThankYouGui"
+	screenGui.ResetOnSpawn = false
+
+	local frame = Instance.new("Frame", screenGui)
+	frame.Size = UDim2.new(0, 190, 0, 40)
+	frame.Position = UDim2.new(0.5, 0, 0, 40)
+	frame.AnchorPoint = Vector2.new(0.5, 0)
+	frame.BackgroundColor3 = Color3.fromRGB(22, 34, 72)
+	frame.BorderSizePixel = 0
+
+	local corner = Instance.new("UICorner", frame)
+	corner.CornerRadius = UDim.new(0, 10)
+
+	local circle = Instance.new("Frame", frame)
+	circle.Size = UDim2.new(0, 30, 0, 30)
+	circle.Position = UDim2.new(0, 5, 0.5, -15)
+	circle.BackgroundColor3 = Color3.new(1, 1, 1)
+	circle.BorderSizePixel = 0
+
+	local circleCorner = Instance.new("UICorner", circle)
+	circleCorner.CornerRadius = UDim.new(1, 0)
+
+	local iconLabel = Instance.new("TextLabel", circle)
+	iconLabel.Size = UDim2.new(1, 0, 1, 0)
+	iconLabel.BackgroundTransparency = 1
+	iconLabel.Text = "i"
+	iconLabel.TextColor3 = Color3.new(0, 0, 0)
+	iconLabel.Font = Enum.Font.FredokaOne
+	iconLabel.TextSize = 20
+	iconLabel.Rotation = 180
+
+	local message = Instance.new("TextLabel", frame)
+	message.Size = UDim2.new(1, -45, 1, 0)
+	message.Position = UDim2.new(0, 40, 0, 0)
+	message.BackgroundTransparency = 1
+	message.Text = "ty for using left ink :)"
+	message.TextColor3 = Color3.new(1, 1, 1)
+	message.Font = Enum.Font.FredokaOne
+	message.TextSize = 16
+	message.TextXAlignment = Enum.TextXAlignment.Left
+
+	TweenService:Create(frame, TweenInfo.new(0.3), {BackgroundTransparency = 0}):Play()
+	task.wait(3)
+	TweenService:Create(frame, TweenInfo.new(0.3), {BackgroundTransparency = 1}):Play()
+	task.wait(0.3)
+	screenGui:Destroy()
+end
+
+-- GUI Setup
+local function createMainGui()
+	local screenGui = Instance.new("ScreenGui", guiParent)
+	screenGui.Name = "LeftInkMainGui"
+	screenGui.ResetOnSpawn = false
+
+	local frame = Instance.new("Frame", screenGui)
+	frame.Size = UDim2.new(0, 200, 0, 180)
+	frame.Position = UDim2.new(0.5, 0, 0.5, 0)
+	frame.AnchorPoint = Vector2.new(0.5, 0.5)
+	frame.BackgroundColor3 = Color3.fromRGB(22, 34, 72)
+	frame.BorderSizePixel = 0
+	frame.Active = true
+	frame.Draggable = true
+
+	local frameCorner = Instance.new("UICorner", frame)
+	frameCorner.CornerRadius = UDim.new(0, 12)
+
+	local title = Instance.new("TextLabel", frame)
+	title.Size = UDim2.new(1, 0, 0, 30)
+	title.Text = "Left Ink"
+	title.TextColor3 = Color3.fromRGB(220, 220, 220)
+	title.BackgroundColor3 = Color3.fromRGB(16, 24, 52)
+	title.Font = Enum.Font.FredokaOne
+	title.TextSize = 20
+	title.BorderSizePixel = 0
+
+	local titleCorner = Instance.new("UICorner", title)
+	titleCorner.CornerRadius = UDim.new(0, 12)
+
+	-- Helper function to create toggles
+	local function makeToggle(text, yPos, callback)
+		local btn = Instance.new("TextButton", frame)
+		btn.Size = UDim2.new(1, -20, 0, 28)
+		btn.Position = UDim2.new(0, 10, 0, yPos)
+		btn.BackgroundColor3 = Color3.new(1, 1, 1)
+		btn.TextColor3 = Color3.new(0, 0, 0)
+		btn.Font = Enum.Font.FredokaOne
+		btn.TextSize = 16
+		btn.Text = text .. " [OFF]"
+
+		local corner = Instance.new("UICorner", btn)
+		corner.CornerRadius = UDim.new(0, 8)
+
+		btn.MouseButton1Click:Connect(function()
+			local isOff = btn.Text:find("OFF") ~= nil
+			btn.Text = text .. (isOff and " [ON]" or " [OFF]")
+			callback(isOff)
+		end)
+		return btn
+	end
+
+	local aimbotBtn = makeToggle("Aimbot (Rebel)", 40, function(enabled)
+		isAimbotOn = enabled
+	end)
+
+	local espBtn = makeToggle("ESP (Rebel)", 75, function(enabled)
+		isEspOn = enabled
+		if not enabled then
+			for _, part in pairs(Workspace:GetDescendants()) do
+				if part:IsA("BasePart") and part:FindFirstChild("ESP") then
+					part.ESP:Destroy()
+				end
+			end
+		end
+	end)
+
+	local infiniteJumpBtn = makeToggle("Infinite Jump", 110, function(enabled)
+		isInfiniteJumpOn = enabled
+	end)
+
+	-- Speed Label
+	local speedLabel = Instance.new("TextLabel", frame)
+	speedLabel.Text = "Speed:"
+	speedLabel.Size = UDim2.new(0, 50, 0, 28)
+	speedLabel.Position = UDim2.new(0, 10, 0, 145)
+	speedLabel.TextColor3 = Color3.new(1, 1, 1)
+	speedLabel.BackgroundTransparency = 1
+	speedLabel.Font = Enum.Font.FredokaOne
+	speedLabel.TextSize = 16
+	speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+	-- Speed TextBox
+	local speedInput = Instance.new("TextBox", frame)
+	speedInput.Size = UDim2.new(1, -70, 0, 28)
+	speedInput.Position = UDim2.new(0, 65, 0, 145)
+	speedInput.Text = tostring(walkSpeed)
+	speedInput.ClearTextOnFocus = false
+	speedInput.TextColor3 = Color3.new(0, 0, 0)
+	speedInput.BackgroundColor3 = Color3.new(1, 1, 1)
+	speedInput.Font = Enum.Font.FredokaOne
+	speedInput.TextSize = 16
+
+	local inputCorner = Instance.new("UICorner", speedInput)
+	inputCorner.CornerRadius = UDim.new(0, 8)
+
+	speedInput.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			local val = tonumber(speedInput.Text)
+			if val then
+				if val < 28 then val = 28 end
+				if val > 100 then val = 100 end
+				walkSpeed = val
+				speedInput.Text = tostring(walkSpeed)
+				local char = player.Character
+				if char then
+					local hum = char:FindFirstChildOfClass("Humanoid")
+					if hum then
+						hum.WalkSpeed = walkSpeed
+					end
+				end
+			else
+				speedInput.Text = tostring(walkSpeed)
+			end
+		end
+	end)
+
+	--  speed
+	RunService.RenderStepped:Connect(function()
+		local char = player.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum.WalkSpeed = walkSpeed
+			end
+		end
+	end)
+
+	-- Open/Close button
+	local iconGui = Instance.new("ScreenGui", guiParent)
+	iconGui.Name = "LeftInkToggleGui"
+	iconGui.ResetOnSpawn = false
+
+	local toggleBtn = Instance.new("ImageButton", iconGui)
+	toggleBtn.Size = UDim2.new(0, 40, 0, 40)
+	toggleBtn.Position = UDim2.new(1, -60, 0, 20)
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(22, 34, 72)
+	toggleBtn.BorderSizePixel = 0
+	toggleBtn.Image = "rbxassetid://118783379027658"
+
+	local toggleCorner = Instance.new("UICorner", toggleBtn)
+	toggleCorner.CornerRadius = UDim.new(0, 10)
+
+	toggleBtn.MouseButton1Click:Connect(function()
+		frame.Visible = not frame.Visible
+	end)
+end
+
+-- GUI
+local function showLoadPrompt()
+	local screenGui = Instance.new("ScreenGui", guiParent)
+	screenGui.Name = "InkLoadPrompt"
+	screenGui.ResetOnSpawn = false
+	screenGui.IgnoreGuiInset = true
+
+	local frame = Instance.new("Frame", screenGui)
+	frame.Size = UDim2.new(0, 250, 0, 90)
+	frame.Position = UDim2.new(1, -20, 1, -120)
+	frame.AnchorPoint = Vector2.new(1, 1)
+	frame.BackgroundColor3 = Color3.fromRGB(22, 34, 72)
+	frame.BorderSizePixel = 0
+
+	local frameCorner = Instance.new("UICorner", frame)
+	frameCorner.CornerRadius = UDim.new(0, 12)
+
+	local label = Instance.new("TextLabel", frame)
+	label.Size = UDim2.new(1, -20, 0, 35)
+	label.Position = UDim2.new(0, 10, 0, 10)
+	label.BackgroundTransparency = 1
+	label.Text = "Load Left Ink Script?"
+	label.TextColor3 = Color3.fromRGB(220, 220, 220)
+	label.Font = Enum.Font.FredokaOne
+	label.TextSize = 22
+	label.TextXAlignment = Enum.TextXAlignment.Center
+
+	local yesBtn = Instance.new("TextButton", frame)
+	yesBtn.Text = "Yes"
+	yesBtn.Size = UDim2.new(0, 90, 0, 30)
+	yesBtn.Position = UDim2.new(0, 40, 0, 55)
+	yesBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+	yesBtn.TextColor3 = Color3.new(1, 1, 1)
+	yesBtn.Font = Enum.Font.FredokaOne
+	yesBtn.TextSize = 20
+
+	local noBtn = Instance.new("TextButton", frame)
+	noBtn.Text = "No"
+	noBtn.Size = UDim2.new(0, 90, 0, 30)
+	noBtn.Position = UDim2.new(0, 130, 0, 55)
+	noBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	noBtn.TextColor3 = Color3.new(1, 1, 1)
+	noBtn.Font = Enum.Font.FredokaOne
+	noBtn.TextSize = 20
+
+	local yesCorner = Instance.new("UICorner", yesBtn)
+	yesCorner.CornerRadius = UDim.new(0, 12)
+	local noCorner = Instance.new("UICorner", noBtn)
+	noCorner.CornerRadius = UDim.new(0, 12)
+
+	local function closePrompt()
+		TweenService:Create(frame, TweenInfo.new(0.3), {
+			Position = UDim2.new(1, 300, 1, -120)
+		}):Play()
+		task.wait(0.3)
+		screenGui:Destroy()
+	end
+
+	yesBtn.MouseButton1Click:Connect(function()
+		closePrompt()
+		local success, err = pcall(createMainGui)
+		if not success then
+			showErrorOverlay(err)
+		else
+			showThankYouMsg()
+		end
+	end)
+
+	noBtn.MouseButton1Click:Connect(closePrompt)
+
+	task.delay(10, function()
+		if screenGui and screenGui.Parent then
+			closePrompt()
+		end
+	end)
+end
+
+-- Main loop for aimbot & esp
+RunService.RenderStepped:Connect(function()
+	local char = player.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+	local rootPart = char.HumanoidRootPart
+	local nearestTarget, nearestDist = nil, math.huge
+
+	for _, model in ipairs(Workspace:GetDescendants()) do
+		if model:IsA("Model") and not model:IsDescendantOf(Players) and not model:IsDescendantOf(char) then
+			local nm = model.Name:lower()
+			if nm:find("guard") or nm:find("guy") or nm:find("squid") then
+				local part = model:FindFirstChildWhichIsA("BasePart")
+				if part then
+					local dist = (part.Position - rootPart.Position).Magnitude
+					if dist < nearestDist then
+						nearestTarget = part
+						nearestDist = dist
+					end
+
+					if isEspOn and not part:FindFirstChild("ESP") then
+						local box = Instance.new("BoxHandleAdornment")
+						box.Name = "ESP"
+						box.Adornee = part
+						box.Size = part.Size
+						box.Color3 = Color3.fromRGB(255, 0, 0)
+						box.AlwaysOnTop = true
+						box.ZIndex = 10
+						box.Transparency = 0.25
+						box.AdornCullingMode = Enum.AdornCullingMode.Never
+						box.Parent = part
+					elseif not isEspOn then
+						if part:FindFirstChild("ESP") then
+							part.ESP:Destroy()
+						end
+					end
+				end
+			end
+		end
+	end
+
+	if isAimbotOn and nearestTarget then
+		local camPos = cam.CFrame.Position
+		local direction = (nearestTarget.Position - camPos).Unit
+		cam.CFrame = cam.CFrame:Lerp(CFrame.new(camPos, camPos + direction), AIM_LERP_SPEED)
+	end
+end)
+
+-- Infinite jump 
+UserInput.JumpRequest:Connect(function()
+	if isInfiniteJumpOn then
+		local char = player.Character
+		if char then
+			local humanoid = char:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			end
+		end
+	end
+end)
+
+-- Apply speed on respawn
+player.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid")
+	hum.WalkSpeed = walkSpeed
+end)
+
+-- Launch prompt
+local success, err = pcall(showLoadPrompt)
+if not success then
+	showErrorOverlay(err)
+end
